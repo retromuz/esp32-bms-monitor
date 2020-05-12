@@ -1,0 +1,9 @@
+.pio
+.classpath
+.project
+.cproject
+data/firmware.properties
+.settings
+.travis.yml
+.pydevproject
+
