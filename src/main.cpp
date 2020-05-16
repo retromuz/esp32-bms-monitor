@@ -84,10 +84,10 @@ void loop(void) {
 		bmsv();
 		bmsb();
 	}
-	if (loops % 15000 == 1) {
+	if (loops % 10000 == 1) {
 		bmsInit = true;
 	}
-	loops ++;
+	loops++;
 }
 
 void setupPins() {
@@ -248,12 +248,16 @@ void bmsv() {
 	bmsRead(&av);
 	if (av.used < 5 || av.array[0] != 0xdd || av.array[av.used - 1] != 0x77) {
 		freeArray(&av);
+		free(buf);
+		buf = NULL;
 		return;
 	}
 	unsigned int dataLen = av.array[3];
 	dataLen |= av.array[2] << 8;
 	if (dataLen > 64) {
 		freeArray(&av);
+		free(buf);
+		buf = NULL;
 		return;
 	}
 	buf[71] = 0;
@@ -263,7 +267,10 @@ void bmsv() {
 	}
 
 	for (int x = 0; x < 14; x++) {
-		if (cells[x] > 5000 || cells[x] < 2500) {
+		if (cells[x] > 5000 || cells[x] < 2000) {
+			freeArray(&av);
+			free(buf);
+			buf = NULL;
 			return;
 		}
 	}
@@ -286,12 +293,16 @@ void bmsb() {
 	bmsRead(&ab);
 	if (ab.used < 5 || ab.array[0] != 0xdd || ab.array[ab.used - 1] != 0x77) {
 		freeArray(&ab);
+		free(buf);
+		buf = NULL;
 		return;
 	}
 	unsigned int dataLen = ab.array[3];
 	dataLen |= ab.array[2] << 8;
 	if (dataLen > 64) {
 		freeArray(&ab);
+		free(buf);
+		buf = NULL;
 		return;
 	}
 	unsigned int voltage = (ab.array[4] << 8) | ab.array[5];
@@ -300,6 +311,8 @@ void bmsb() {
 	if (voltage < MIN_BATT_VOLTAGE || voltage > MAX_BATT_VOLTAGE
 			|| nominalCapacity > MAX_NOMINAL_CAPACITY
 			|| remainingCapacity > MAX_NOMINAL_CAPACITY) {
+		free(buf);
+		buf = NULL;
 		freeArray(&ab);
 		return;
 	}
@@ -335,15 +348,15 @@ void bmsWrite(char *data, int len) {
 }
 
 void bmsRead(Array *a) {
+	unsigned int c = 0;
 	while (!Serial2.available()) {
 		// wait until serial data is available
-	}
-	unsigned int c = 0;
-	while (Serial2.available()) {
-		insertArray(a, Serial2.read());
-		if (++c > 128) {
+		if (++c > 1024) {
 			break;
 		}
+	}
+	while (Serial2.available()) {
+		insertArray(a, Serial2.read());
 	}
 }
 
