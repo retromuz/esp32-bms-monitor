@@ -6,22 +6,24 @@ AsyncWebServer server(80); // Create a webserver object that listens for HTTP re
 Ticker ticker;
 
 volatile unsigned int ticks = 0;
+volatile unsigned int totalTicks = 0;
 volatile unsigned long int epoch = 0;
 volatile unsigned long int lastSerialCallAt = 0;
-volatile unsigned char bmsInit = 0;
+volatile bool bmsInit = false;
+volatile unsigned int loops = 0;
 String sv;
 String sb;
 
 void initArray(Array *a, unsigned int initialSize) {
 	a->used = 0;
-	a->array = (char *) malloc(initialSize * sizeof(char));
+	a->array = (char*) malloc(initialSize * sizeof(char));
 	a->size = initialSize;
 }
 
 void insertArray(Array *a, char element) {
 	if (a->used == a->size) {
 		a->size *= 2;
-		a->array = (char *) realloc(a->array, a->size * sizeof(char));
+		a->array = (char*) realloc(a->array, a->size * sizeof(char));
 	}
 	a->array[a->used++] = element;
 }
@@ -34,10 +36,10 @@ void freeArray(Array *a) {
 }
 
 void ISRwatchdog() {
+	++totalTicks;
 	if (++ticks > 30) {
-		Serial.println("watchdog reset");
+		ESP.restart();
 	}
-	bmsInit = 1;
 }
 
 void setup(void) {
@@ -53,7 +55,6 @@ void setup(void) {
 	}
 	if (setupWiFi()) {
 		initBms();
-		digitalWrite(WIFI_LED, HIGH);
 		setupWebServer();
 		setupNTPClient();
 		setupOTA();
@@ -72,21 +73,24 @@ void loop(void) {
 		Serial.println("Checking WiFi connectivity.");
 		epoch = timeClient.getEpochTime();
 		if (!WiFi.isConnected()) {
-			Serial.println("WiFi reconnecting...");
-			WiFi.disconnect(true);
-			delay(500);
-			setupWiFi();
+			ESP.restart();
+		}
+		if (!timeClient.update()) {
+			ESP.restart();
 		}
 	}
-	if (bmsInit == 1) {
-		bmsInit = 0;
+	if (bmsInit) {
+		bmsInit = false;
 		bmsv();
 		bmsb();
 	}
+	if (loops % 1000 == 1) {
+		bmsInit = true;
+	}
+	loops ++;
 }
 
 void setupPins() {
-	pinMode(WIFI_LED, OUTPUT);
 }
 
 String readProperty(String props, String key) {
@@ -108,6 +112,7 @@ String readProperty(String props, String key) {
 
 bool setupWiFi() {
 
+	configureWiFi();
 	if (SPIFFS.exists("/firmware.properties")) {
 		File f = SPIFFS.open("/firmware.properties", "r");
 		if (f && f.size()) {
@@ -129,7 +134,6 @@ bool setupWiFi() {
 			while (WiFi.status() != WL_CONNECTED) { // Wait for the Wi-Fi to connect: scan for Wi-Fi networks, and connect to the strongest of the networks above
 				ticks = 0;
 				Serial.print('.');
-				digitalWrite(WIFI_LED, !digitalRead(WIFI_LED));
 				delay(40);
 			}
 			Serial.println();
@@ -137,6 +141,26 @@ bool setupWiFi() {
 		}
 	}
 	return false;
+}
+
+void configureWiFi() {
+	WiFi.persistent(false);
+	WiFi.disconnect(true);
+	WiFi.mode(WIFI_OFF);
+	WiFi.mode(WIFI_STA);
+	WiFi.config(INADDR_NONE, INADDR_NONE, INADDR_NONE);
+
+	WiFi.onEvent([](WiFiEvent_t event, WiFiEventInfo_t info) {
+		Serial.println(IPAddress(info.got_ip.ip_info.ip.addr));
+	},
+	WiFiEvent_t::SYSTEM_EVENT_STA_GOT_IP);
+
+	WiFi.onEvent([](WiFiEvent_t event, WiFiEventInfo_t info) {
+		WiFi.persistent(false);
+		WiFi.disconnect(true);
+		ESP.restart();
+	},
+	WiFiEvent_t::SYSTEM_EVENT_STA_DISCONNECTED);
 }
 
 void setupWebServer() {
@@ -153,10 +177,16 @@ void setupWebServer() {
 		request->send(SPIFFS, "/favicon.ico");
 	});
 	server.on("/v", HTTP_GET, [](AsyncWebServerRequest *request) {
-		request->send_P(200, CONTENT_TYPE_APPLICATION_JSON, sv.c_str());
+		AsyncWebServerResponse *response = request->beginResponse(200,
+		CONTENT_TYPE_APPLICATION_JSON, sv.c_str());
+		response->addHeader("Access-Control-Allow-Origin", "*");
+		request->send(response);
 	});
 	server.on("/b", HTTP_GET, [](AsyncWebServerRequest *request) {
-		request->send_P(200, CONTENT_TYPE_APPLICATION_JSON, sb.c_str());
+		AsyncWebServerResponse *response = request->beginResponse(200,
+		CONTENT_TYPE_APPLICATION_JSON, sb.c_str());
+		response->addHeader("Access-Control-Allow-Origin", "*");
+		request->send(response);
 	});
 
 	server.onNotFound(notFound);
@@ -173,8 +203,8 @@ void setupNTPClient() {
 	Serial.println("Synchronizing time with NTP");
 	timeClient.begin();
 	timeClient.setTimeOffset(39600);
-	while (!timeClient.update()) {
-		timeClient.forceUpdate();
+	if (!timeClient.update()) {
+		Serial.println("NTP update failed");
 	}
 	Serial.println(timeClient.getFormattedDate());
 }
@@ -195,27 +225,28 @@ void setupOTA() {
 	ArduinoOTA.onError([](ota_error_t error) {
 		Serial.printf("Error[%u]: ", error);
 		if (error == OTA_AUTH_ERROR)
-		Serial.println("Auth Failed");
+			Serial.println("Auth Failed");
 		else if (error == OTA_BEGIN_ERROR)
-		Serial.println("Begin Failed");
+			Serial.println("Begin Failed");
 		else if (error == OTA_CONNECT_ERROR)
-		Serial.println("Connect Failed");
+			Serial.println("Connect Failed");
 		else if (error == OTA_RECEIVE_ERROR)
-		Serial.println("Receive Failed");
+			Serial.println("Receive Failed");
 		else if (error == OTA_END_ERROR)
-		Serial.println("End Failed");
+			Serial.println("End Failed");
 	});
 	ArduinoOTA.begin();
 }
 
 void bmsv() {
-	char* buf = (char *) malloc(72 * sizeof(char));
+
+	char *buf = (char*) malloc(72 * sizeof(char));
 	char data[] = { 0xdd, 0xa5, 0x04, 0x00, 0xff, 0xfc, 0x77 };
 	Array av;
 	initArray(&av, 35);
 	bmsWrite(data, 7);
 	bmsRead(&av);
-	if (av.used < 5 || av.array[0] != 0xdd) {
+	if (av.used < 5 || av.array[0] != 0xdd || av.array[av.used - 1] != 0x77) {
 		freeArray(&av);
 		return;
 	}
@@ -226,20 +257,19 @@ void bmsv() {
 		return;
 	}
 	buf[71] = 0;
-	sprintf(buf, FMT_VOLTAGES, ((av.array[4] << 8) | av.array[5]),
-			((av.array[6] << 8) | av.array[7]),
-			((av.array[8] << 8) | av.array[9]),
-			((av.array[10] << 8) | av.array[11]),
-			((av.array[12] << 8) | av.array[13]),
-			((av.array[14] << 8) | av.array[15]),
-			((av.array[16] << 8) | av.array[17]),
-			((av.array[18] << 8) | av.array[19]),
-			((av.array[20] << 8) | av.array[21]),
-			((av.array[22] << 8) | av.array[23]),
-			((av.array[24] << 8) | av.array[25]),
-			((av.array[26] << 8) | av.array[27]),
-			((av.array[28] << 8) | av.array[29]),
-			((av.array[30] << 8) | av.array[31]));
+	int cells[14];
+	for (int x = 0; x < 14; x++) {
+		cells[x] = (av.array[(x * 2) + 4] << 8) | av.array[(x * 2) + 5];
+	}
+
+	for (int x = 0; x < 14; x++) {
+		if (cells[x] > 5000 || cells[x] < 2500) {
+			return;
+		}
+	}
+	sprintf(buf, FMT_VOLTAGES, cells[0], cells[1], cells[2], cells[3], cells[4],
+			cells[5], cells[6], cells[7], cells[8], cells[9], cells[10],
+			cells[11], cells[12], cells[13]);
 	freeArray(&av);
 	sv = String(buf);
 	free(buf);
@@ -247,13 +277,14 @@ void bmsv() {
 }
 
 void bmsb() {
-	char* buf = (char *) malloc(100 * sizeof(char));
+
+	char *buf = (char*) malloc(100 * sizeof(char));
 	char data[] = { 0xdd, 0xa5, 0x03, 0x00, 0xff, 0xfd, 0x77 };
 	Array ab;
 	initArray(&ab, 34);
 	bmsWrite(data, 7);
 	bmsRead(&ab);
-	if (ab.used < 5 || ab.array[0] != 0xdd) {
+	if (ab.used < 5 || ab.array[0] != 0xdd || ab.array[ab.used - 1] != 0x77) {
 		freeArray(&ab);
 		return;
 	}
@@ -263,15 +294,24 @@ void bmsb() {
 		freeArray(&ab);
 		return;
 	}
+	unsigned int voltage = (ab.array[4] << 8) | ab.array[5];
+	unsigned int remainingCapacity = (ab.array[8] << 8) | ab.array[9];
+	unsigned int nominalCapacity = (ab.array[10] << 8) | ab.array[11];
+	if (voltage < MIN_BATT_VOLTAGE || voltage > MAX_BATT_VOLTAGE
+			|| nominalCapacity > MAX_NOMINAL_CAPACITY
+			|| remainingCapacity > MAX_NOMINAL_CAPACITY) {
+		freeArray(&ab);
+		return;
+	}
 	buf[99] = 0;
-	sprintf(buf, FMT_BASIC_INFO, (ab.array[4] << 8) | ab.array[5], // Voltage
-	(ab.array[6] << 8) | ab.array[7],   // Current
-	(ab.array[8] << 8) | ab.array[9], // Remaining capacity
-	(ab.array[10] << 8) | ab.array[11], // Nominal capacity
-	(ab.array[12] << 8) | ab.array[13], // cycle times
-	(ab.array[14] << 8) | ab.array[15], // date of manufacture
-	ab.array[16] << 8 | ab.array[17], // cell balance state 1s-16s
-	ab.array[18], ab.array[19], // cell balance state 17s-32s
+	sprintf(buf, FMT_BASIC_INFO,
+			voltage, // Voltage
+			(ab.array[6] << 8) | ab.array[7],   // Current
+			remainingCapacity, nominalCapacity,
+			(ab.array[12] << 8) | ab.array[13], // cycle times
+			(ab.array[14] << 8) | ab.array[15], // date of manufacture
+			ab.array[16] << 8 | ab.array[17], // cell balance state 1s-16s
+			ab.array[18], ab.array[19], // cell balance state 17s-32s
 			ab.array[20], ab.array[21], // protection state
 			ab.array[22], // software version
 			ab.array[23], // Percentage of remaining capacity
@@ -289,28 +329,17 @@ void bmsb() {
 void bmsWrite(char *data, int len) {
 	int x = 0;
 	while (x < len) {
-		digitalWrite(WIFI_LED, !digitalRead(WIFI_LED));
 		Serial2.print((char) data[x++]);
 	}
-	digitalWrite(WIFI_LED, HIGH);
 	lastSerialCallAt = timeClient.getEpochTime();
 }
 
 void bmsRead(Array *a) {
-	int loops = 0;
-	int rdlen = 0;
-	char r = 0;
-	while (loops++ < SERIAL_RETRIES && a->used == 0) {
-		while (1) {
-			delay(2);
-			rdlen = Serial2.available();
-			if (rdlen > 0) {
-				r = Serial2.read();
-				insertArray(a, r);
-			} else {
-				break;
-			}
-		}
+	while (!Serial2.available()) {
+		// wait until serial data is available
+	}
+	while (Serial2.available()) {
+		insertArray(a, Serial2.read());
 	}
 }
 

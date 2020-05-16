@@ -50,6 +50,8 @@ class Cell {
 	setStateContinuous(width) {
 		let r = parseInt(0xaa * (267 - width) / 267);
 		let g = parseInt(0xaa - r);
+		r = r < 0 ? 0 : r;
+		g = g < 0 ? 0 : g;
 		r = r.toString(16);
 		g = g.toString(16);
 		r = r.length == 1 ? '0' + r : r;
@@ -72,13 +74,7 @@ class Cell {
 
 	setBalancing(balancing) {
 		if (this.balancing != balancing) {
-			if (balancing) {
-				this.outline.animate(480, 480, 'now').attr({
-					fill: '#806ef1'
-				}).loop(true, true);
-			} else {
-				this.outline.timeline().stop();
-			}
+			this.outline.fill(balancing ? '#806ef1' : '#000000');
 		}
 		this.balancing = balancing;
 	}

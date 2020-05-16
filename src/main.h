@@ -22,12 +22,13 @@
 #define TXD2 17
 
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
-#define WIFI_LED 2
 #define FMT_BASIC_INFO "[%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d]"
 #define FMT_VOLTAGES "[%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d]"
 #define CONTENT_TYPE_APPLICATION_JSON "application/json"
 
-#define SERIAL_RETRIES 128
+#define MIN_BATT_VOLTAGE 4000
+#define MAX_BATT_VOLTAGE 6200
+#define MAX_NOMINAL_CAPACITY 3800
 
 #ifdef __cplusplus
 extern "C" {
@@ -46,6 +47,7 @@ void initBms();
 void initBmsStub(char * data, int len);
 void bmsDrainSerial();
 bool setupWiFi();
+void configureWiFi();
 void setupWebServer();
 void notFound(AsyncWebServerRequest *request);
 void setupNTPClient();
