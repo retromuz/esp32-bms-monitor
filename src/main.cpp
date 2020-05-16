@@ -84,7 +84,7 @@ void loop(void) {
 		bmsv();
 		bmsb();
 	}
-	if (loops % 1000 == 1) {
+	if (loops % 15000 == 1) {
 		bmsInit = true;
 	}
 	loops ++;
@@ -338,8 +338,12 @@ void bmsRead(Array *a) {
 	while (!Serial2.available()) {
 		// wait until serial data is available
 	}
+	unsigned int c = 0;
 	while (Serial2.available()) {
 		insertArray(a, Serial2.read());
+		if (++c > 128) {
+			break;
+		}
 	}
 }
 
