@@ -7,12 +7,13 @@ Ticker ticker;
 
 volatile unsigned int ticks = 0;
 volatile unsigned int totalTicks = 0;
-volatile unsigned long int epoch = 0;
+volatile unsigned long int epochWiFi = 0;
 volatile unsigned long int lastSerialCallAt = 0;
 volatile bool bmsInit = false;
 volatile unsigned int loops = 0;
 String sv;
 String sb;
+volatile int current;
 
 void initArray(Array *a, unsigned int initialSize) {
 	a->used = 0;
@@ -69,9 +70,9 @@ void setup(void) {
 void loop(void) {
 	ticks = 0;
 	ArduinoOTA.handle();
-	if (timeClient.getEpochTime() - epoch > 20) {
+	if (timeClient.getEpochTime() - epochWiFi > 20) {
 		Serial.println("Checking WiFi connectivity.");
-		epoch = timeClient.getEpochTime();
+		epochWiFi = timeClient.getEpochTime();
 		if (!WiFi.isConnected()) {
 			ESP.restart();
 		}
@@ -84,7 +85,7 @@ void loop(void) {
 		bmsv();
 		bmsb();
 	}
-	if (loops % 10000 == 1) {
+	if (loops % 6000 == 1) {
 		bmsInit = true;
 	}
 	loops++;
@@ -185,6 +186,14 @@ void setupWebServer() {
 	server.on("/b", HTTP_GET, [](AsyncWebServerRequest *request) {
 		AsyncWebServerResponse *response = request->beginResponse(200,
 		CONTENT_TYPE_APPLICATION_JSON, sb.c_str());
+		response->addHeader("Access-Control-Allow-Origin", "*");
+		request->send(response);
+	});
+	server.on("/c", HTTP_GET, [](AsyncWebServerRequest *request) {
+		char buf[8];
+		sprintf(buf, "%d", current);
+		AsyncWebServerResponse *response = request->beginResponse(200,
+		CONTENT_TYPE_APPLICATION_JSON, buf);
 		response->addHeader("Access-Control-Allow-Origin", "*");
 		request->send(response);
 	});
@@ -316,10 +325,21 @@ void bmsb() {
 		freeArray(&ab);
 		return;
 	}
+	unsigned int ntc0 = (ab.array[27] << 8) | ab.array[28];
+	unsigned int ntc1 = (ab.array[29] << 8) | ab.array[30];
+	if (ntc0 == 0 || ntc1 == 0) {
+		free(buf);
+		buf = NULL;
+		freeArray(&ab);
+		return;
+	}
+	unsigned int curr = (ab.array[6] << 8) | ab.array[7];
+	current = curr > 0x7fff ? (-1.0 * (0xffff - curr)) : curr;
+
 	buf[99] = 0;
 	sprintf(buf, FMT_BASIC_INFO,
 			voltage, // Voltage
-			(ab.array[6] << 8) | ab.array[7],   // Current
+			current,   // Current
 			remainingCapacity, nominalCapacity,
 			(ab.array[12] << 8) | ab.array[13], // cycle times
 			(ab.array[14] << 8) | ab.array[15], // date of manufacture
@@ -331,8 +351,8 @@ void bmsb() {
 			ab.array[24], // MOSFET control status
 			ab.array[25], // battery serial number
 			ab.array[26], // Number of NTCs
-			((ab.array[27] << 8) | ab.array[28]), // NTC 0, high bit first, Using absolute temperature transmission, 2731+ (actual temperature *10), 0 degrees = 2731, 25 degrees = 2731+25*10 = 2981
-			((ab.array[29] << 8) | ab.array[30])); // NTC 1, high bit first, Using absolute temperature transmission, 2731+ (actual temperature *10), 0 degrees = 2731, 25 degrees = 2731+25*10 = 2981
+			ntc0, // NTC 0, high bit first, Using absolute temperature transmission, 2731+ (actual temperature *10), 0 degrees = 2731, 25 degrees = 2731+25*10 = 2981
+			ntc1); // NTC 1, high bit first, Using absolute temperature transmission, 2731+ (actual temperature *10), 0 degrees = 2731, 25 degrees = 2731+25*10 = 2981
 	freeArray(&ab);
 	sb = String(buf);
 	free(buf);
@@ -350,8 +370,7 @@ void bmsWrite(char *data, int len) {
 void bmsRead(Array *a) {
 	unsigned int c = 0;
 	while (!Serial2.available()) {
-		// wait until serial data is available
-		if (++c > 1024) {
+		if (++c > 0xffff) {
 			break;
 		}
 	}

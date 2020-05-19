@@ -87,19 +87,19 @@ function q(cells) {
 		type: 'GET',
 		dataType: 'json',
 		success: function (data) {
-			let voltage = data[0] / 100;
-			let battV = data[0] * 10;
+			let voltage = data[0] / 100.0;
+			let battmV = data[0] * 10;
 			let remPerc = data[12];
-			let current = ((data[1] > 0x7FFF) ? -((0xffff - data[1]) / 100) : (data[1] / 100));
+			let current = data[1] / 100.0;
 			let power = voltage * current;
-			let remcapacity = data[2] / 100;
-			let nomcapacity = data[3] / 100;
+			let remcapacity = data[2] / 100.0;
+			let nomcapacity = data[3] / 100.0;
 			let cycles = data[4];
 			let cellbalance = data[6].toString(2);
-			let temp0 = ((data[16] - 2731) / 10).toFixed(1);
-			let temp1 = ((data[17] - 2731) / 10).toFixed(1);
+			let temp0 = ((data[16] - 2731) / 10.0).toFixed(1);
+			let temp1 = ((data[17] - 2731) / 10.0).toFixed(1);
 			$.ajax({
-				url: '/v',
+				url: 'http://bms.karunadheera.com/v',
 				type: 'GET',
 				dataType: 'json',
 				success: function (datav) {
@@ -110,7 +110,7 @@ function q(cells) {
 						return prev > curr ? prev : curr;
 					});
 					for (let x = 0; x < datav.length; x++) {
-						cells[x].setVoltage(datav[x], battV, remPerc);
+						cells[x].setVoltage(datav[x], battmV, remPerc);
 					}
 					$('.summary').html('<span>Battery Voltage : ' +
 						voltage.toFixed(2) + 'V</span><br /><span>Current : ' +
