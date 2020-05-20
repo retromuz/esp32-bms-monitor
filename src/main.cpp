@@ -177,15 +177,11 @@ void setupWebServer() {
 	server.on("/favicon.ico", HTTP_GET, [](AsyncWebServerRequest *request) {
 		request->send(SPIFFS, "/favicon.ico");
 	});
-	server.on("/v", HTTP_GET, [](AsyncWebServerRequest *request) {
+	server.on("/r", HTTP_GET, [](AsyncWebServerRequest *request) {
+		char buf[256];
+		sprintf(buf, "{\"v\":%s,\"b\":%s}", sv.c_str(), sb.c_str());
 		AsyncWebServerResponse *response = request->beginResponse(200,
-		CONTENT_TYPE_APPLICATION_JSON, sv.c_str());
-		response->addHeader("Access-Control-Allow-Origin", "*");
-		request->send(response);
-	});
-	server.on("/b", HTTP_GET, [](AsyncWebServerRequest *request) {
-		AsyncWebServerResponse *response = request->beginResponse(200,
-		CONTENT_TYPE_APPLICATION_JSON, sb.c_str());
+		CONTENT_TYPE_APPLICATION_JSON, buf);
 		response->addHeader("Access-Control-Allow-Origin", "*");
 		request->send(response);
 	});
@@ -205,7 +201,7 @@ void setupWebServer() {
 }
 
 void notFound(AsyncWebServerRequest *request) {
-	request->send(404, "text/plain", "Not found");
+	request->send(SPIFFS, "/index.htm");
 }
 
 void setupNTPClient() {

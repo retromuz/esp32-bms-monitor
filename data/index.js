@@ -83,50 +83,41 @@ class Cell {
 
 function q(cells) {
 	$.ajax({
-		url: '/b',
+		url: '/r',
 		type: 'GET',
 		dataType: 'json',
 		success: function (data) {
-			let voltage = data[0] / 100.0;
-			let battmV = data[0] * 10;
-			let remPerc = data[12];
-			let current = data[1] / 100.0;
+			let voltage = data.b[0] / 100.0;
+			let battmV = data.b[0] * 10;
+			let remPerc = data.b[12];
+			let current = data.b[1] / 100.0;
 			let power = voltage * current;
-			let remcapacity = data[2] / 100.0;
-			let nomcapacity = data[3] / 100.0;
-			let cycles = data[4];
-			let cellbalance = data[6].toString(2);
-			let temp0 = ((data[16] - 2731) / 10.0).toFixed(1);
-			let temp1 = ((data[17] - 2731) / 10.0).toFixed(1);
-			$.ajax({
-				url: 'http://bms.karunadheera.com/v',
-				type: 'GET',
-				dataType: 'json',
-				success: function (datav) {
-					let lowest = datav.reduce((prev, curr) => {
-						return prev < curr ? prev : curr;
-					});
-					let highest = datav.reduce((prev, curr) => {
-						return prev > curr ? prev : curr;
-					});
-					for (let x = 0; x < datav.length; x++) {
-						cells[x].setVoltage(datav[x], battmV, remPerc);
-					}
-					$('.summary').html('<span>Battery Voltage : ' +
-						voltage.toFixed(2) + 'V</span><br /><span>Current : ' +
-						current.toFixed(2) + 'A</span><br /><span>Power : ' +
-						power.toFixed(2) + 'W</span><br /><span>Remaining Capacity : ' +
-						remcapacity.toFixed(2) + 'Ah (' + remPerc + '%)</span><br /><span>Nominal Capacity : ' +
-						nomcapacity.toFixed(2) + 'Ah</span><br /><span>Cycles : ' +
-						cycles + '</span><br /><span>Temperature 0 : ' +
-						temp0 + '&deg;C</span><br /><span>Temperature 1 : ' +
-						temp1 + '&deg;C</span><br /><span>Cell Deviation : ' +
-						(highest - lowest) + 'mV</span>');
-				},
-				error: function (xhr, opts, err) {
-					console.error(err);
-				}
+			let remcapacity = data.b[2] / 100.0;
+			let nomcapacity = data.b[3] / 100.0;
+			let cycles = data.b[4];
+			let cellbalance = data.b[6].toString(2);
+			let temp0 = ((data.b[16] - 2731) / 10.0).toFixed(1);
+			let temp1 = ((data.b[17] - 2731) / 10.0).toFixed(1);
+			let datav = data.v;
+			let lowest = datav.reduce((prev, curr) => {
+				return prev < curr ? prev : curr;
 			});
+			let highest = datav.reduce((prev, curr) => {
+				return prev > curr ? prev : curr;
+			});
+			for (let x = 0; x < datav.length; x++) {
+				cells[x].setVoltage(datav[x], battmV, remPerc);
+			}
+			$('.summary').html('<span>Battery Voltage : ' +
+				voltage.toFixed(2) + 'V</span><br /><span>Current : ' +
+				current.toFixed(2) + 'A</span><br /><span>Power : ' +
+				power.toFixed(2) + 'W</span><br /><span>Remaining Capacity : ' +
+				remcapacity.toFixed(2) + 'Ah (' + remPerc + '%)</span><br /><span>Nominal Capacity : ' +
+				nomcapacity.toFixed(2) + 'Ah</span><br /><span>Cycles : ' +
+				cycles + '</span><br /><span>Temperature 0 : ' +
+				temp0 + '&deg;C</span><br /><span>Temperature 1 : ' +
+				temp1 + '&deg;C</span><br /><span>Cell Deviation : ' +
+				(highest - lowest) + 'mV</span>');
 			let x = 0;
 			while ((x < cells.length)) {
 				cells[x].setBalancing(cellbalance & (0b1 << x));
