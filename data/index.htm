@@ -11,15 +11,35 @@ viewport {
 span {
 	font-size: 22px !important;
 }
+
+body {
+	padding: 8px;
+}
 </style>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css"></link>
-<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.0/jquery.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/svg.js/3.0.16/svg.min.js" integrity="sha256-MCvBrhCuX8GNt0gmv06kZ4jGIi1R2QNaSkadjRzinFs=" crossorigin="anonymous"></script>
+<link rel="stylesheet"
+	href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css"></link>
+<script
+	src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.0/jquery.min.js"></script>
+<script
+	src="https://cdnjs.cloudflare.com/ajax/libs/svg.js/3.0.16/svg.min.js"
+	integrity="sha256-MCvBrhCuX8GNt0gmv06kZ4jGIi1R2QNaSkadjRzinFs="
+	crossorigin="anonymous"></script>
 <script src="/index.js"></script>
 </head>
 <body>
 	<cells></cells>
-	<div class="voltages"></div>
 	<div class="summary"></div>
+	<div class="switch">
+		<span>Discharge Mos: </span> <label>OFF <input type="checkbox"
+			id="s-discharge" class="s-discharge"> <span class="lever"></span>
+			ON
+		</label>
+	</div>
+	<div class="switch">
+		<span>Charge Mos: </span> <label>OFF <input type="checkbox"
+			id="s-charge" class="s-charge"> <span class="lever"></span>
+			ON
+		</label>
+	</div>
 </body>
 </html>

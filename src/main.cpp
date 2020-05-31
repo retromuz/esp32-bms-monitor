@@ -10,10 +10,13 @@ volatile unsigned int totalTicks = 0;
 volatile unsigned long int epochWiFi = 0;
 volatile unsigned long int lastSerialCallAt = 0;
 volatile bool bmsInit = false;
+volatile bool bmsFet = false;
+volatile char bmsFetVal = 0;
 volatile unsigned int loops = 0;
 String sv;
 String sb;
 volatile int current;
+volatile uint8_t ota_loops = 0;
 
 void initArray(Array *a, unsigned int initialSize) {
 	a->used = 0;
@@ -84,8 +87,11 @@ void loop(void) {
 		bmsInit = false;
 		bmsv();
 		bmsb();
+	} else if (bmsFet) {
+		bmsFet = false;
+		writeFets(bmsFetVal);
 	}
-	if (loops % 6000 == 1) {
+	if (loops % 10000 == 1) {
 		bmsInit = true;
 	}
 	loops++;
@@ -193,6 +199,21 @@ void setupWebServer() {
 		response->addHeader("Access-Control-Allow-Origin", "*");
 		request->send(response);
 	});
+	server.on("/fw", HTTP_POST, [](AsyncWebServerRequest *request) {
+		try {
+			AsyncWebParameter *s = request->getParam("s", true, false);
+			bmsFetVal = s->value().toInt();
+			bmsFet = true;
+			AsyncWebServerResponse *response = request->beginResponse(200,
+					CONTENT_TYPE_APPLICATION_JSON, "0");
+					response->addHeader("Access-Control-Allow-Origin", "*");
+			response->addHeader("Access-Control-Allow-Origin", "*");
+			request->send(response);
+		} catch (...) {
+			Serial.println("exception");
+			request->send_P(200, CONTENT_TYPE_APPLICATION_JSON, "-1");
+		}
+	});
 
 	server.onNotFound(notFound);
 
@@ -220,12 +241,15 @@ void setupOTA() {
 	ArduinoOTA.setPassword("Sup3rSecr3t");
 	ArduinoOTA.onStart([]() {
 		Serial.println("Start");
+		bmsDrainSerial();
 	});
 	ArduinoOTA.onEnd([]() {
 		Serial.println("\nEnd");
 	});
 	ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
 		Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
+		if (ota_loops++ % 10 == 0)
+			bmsv();
 	});
 	ArduinoOTA.onError([](ota_error_t error) {
 		Serial.printf("Error[%u]: ", error);
@@ -243,10 +267,32 @@ void setupOTA() {
 	ArduinoOTA.begin();
 }
 
+void writeFets(char s) {
+	if (s < 0 || s > 3) {
+		return;
+	}
+
+	// 0b11: discharge off, charge off
+	// 0b10: discharge off, charge  on
+	// 0b01: discharge  on, charge off
+	// 0b00: discharge  on, charge  on
+
+	char start[9] = { 0xdd, 0x5a, 0x00, 0x02, 0x56, 0x78, 0xff, 0x30, 0x77 };
+	char end[9] = { 0xdd, 0x5a, 0x01, 0x02, 0x00, 0x00, 0xff, 0xfd, 0x77 };
+	char checksum = 29 - s;
+	char data[9] = { 0xdd, 0x5a, 0xe1, 0x02, 0x00, s, 0xff, checksum, 0x77 };
+	bmsWrite(start, 9);
+	bmsDrainSerial();
+	bmsWrite(data, 9);
+	bmsDrainSerial();
+	bmsWrite(end, 9);
+	bmsDrainSerial();
+}
+
 void bmsv() {
 
 	char *buf = (char*) malloc(72 * sizeof(char));
-	char data[] = { 0xdd, 0xa5, 0x04, 0x00, 0xff, 0xfc, 0x77 };
+	char data[7] = { 0xdd, 0xa5, 0x04, 0x00, 0xff, 0xfc, 0x77 };
 	Array av;
 	initArray(&av, 35);
 	bmsWrite(data, 7);
@@ -333,6 +379,8 @@ void bmsb() {
 	current = curr > 0x7fff ? (-1.0 * (0xffff - curr)) : curr;
 
 	buf[99] = 0;
+	uint8_t fets = ab.array[24];
+	fets = ~fets & 0b11;
 	sprintf(buf, FMT_BASIC_INFO,
 			voltage, // Voltage
 			current,   // Current
@@ -344,7 +392,7 @@ void bmsb() {
 			ab.array[20], ab.array[21], // protection state
 			ab.array[22], // software version
 			ab.array[23], // Percentage of remaining capacity
-			ab.array[24], // MOSFET control status
+			fets, // MOSFET control status
 			ab.array[25], // battery serial number
 			ab.array[26], // Number of NTCs
 			ntc0, // NTC 0, high bit first, Using absolute temperature transmission, 2731+ (actual temperature *10), 0 degrees = 2731, 25 degrees = 2731+25*10 = 2981
@@ -377,7 +425,7 @@ void bmsRead(Array *a) {
 
 void initBms() {
 	Serial.println("==== BMS Init...");
-	char buf0[7] = { 0xdd, 0xa5, 0x04, 0x00, 0xff, 0xfc, 0x77 };
+	char buf0[7] = { 221, 165, 4, 0, 255, 252, 119 };
 
 	initBmsStub(buf0, 7);
 	Serial.println("==== BMS init done.\r\n");

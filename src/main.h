@@ -53,6 +53,7 @@ void notFound(AsyncWebServerRequest *request);
 void setupNTPClient();
 void setupOTA();
 void handleRoot();
+void writeFets(char s);
 void bmsv();
 void bmsb();
 void initArray(Array *a, unsigned int initialSize);
