@@ -138,12 +138,12 @@ function q(cells) {
 			}
 			setTimeout(function () {
 				q(cells)
-			}, 1200);
+			}, 4000);
 		},
 		error: function (xhr, opts, err) {
 			setTimeout(function () {
 				q(cells);
-			}, 1200);
+			}, 4000);
 		}
 	});
 }
