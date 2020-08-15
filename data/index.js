@@ -69,9 +69,9 @@ class Cell {
 			let cellVRel = cellV - 3400;
 			let battCellVRel = (battV / 14) - 3400;
 			this.setStateContinuous(parseInt(267 * remPerc * cellVRel / battCellVRel / 100));
-			this.text.tspan(cellV + 'mV');
 			this.cellV = cellV;
 		}
+		this.text.tspan(cellV + 'mV');
 	}
 
 	setBalancing(balancing) {
@@ -150,7 +150,7 @@ function q(cells) {
 
 function fw() {
 	$.ajax({
-		url: 'http://bms.karunadheera.com/fw',
+		url: 'http://bms.karunadheera.com/w',
 		type: 'POST',
 		dataType: 'json',
 		data : $.param({'s' : ($('.s-discharge').is(':checked') ? 0 : 1) * 2 + ($('.s-charge').is(':checked') ? 0 : 1)}),

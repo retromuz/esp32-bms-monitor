@@ -28,7 +28,7 @@
 
 #define MIN_BATT_VOLTAGE 4000
 #define MAX_BATT_VOLTAGE 6200
-#define MAX_NOMINAL_CAPACITY 3800
+#define MAX_NOMINAL_CAPACITY 200000
 
 #ifdef __cplusplus
 extern "C" {

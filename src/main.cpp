@@ -199,7 +199,7 @@ void setupWebServer() {
 		response->addHeader("Access-Control-Allow-Origin", "*");
 		request->send(response);
 	});
-	server.on("/fw", HTTP_POST, [](AsyncWebServerRequest *request) {
+	server.on("/w", HTTP_POST, [](AsyncWebServerRequest *request) {
 		try {
 			AsyncWebParameter *s = request->getParam("s", true, false);
 			bmsFetVal = s->value().toInt();
@@ -247,8 +247,7 @@ void setupOTA() {
 		Serial.println("\nEnd");
 	});
 	ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
-		Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
-		if (ota_loops++ % 10 == 0)
+		if (ota_loops++ % 20 == 0)
 			bmsv();
 	});
 	ArduinoOTA.onError([](ota_error_t error) {
